@@ -1,5 +1,5 @@
 // ===== Cấu hình =====
-const ADMIN = { user: "admin", pass: "admin" }; // ĐỔI mật khẩu này trước khi đưa lên GitHub
+const ADMIN = { user: "admin", pass: "admin123" }; // ĐỔI mật khẩu này trước khi đưa lên GitHub
 const KEY = "lms-data-v1";
 
 // ===== Lưu trữ (localStorage). Muốn dùng chung nhiều máy: thay 2 hàm này bằng Firebase =====
@@ -49,7 +49,7 @@ function enter(user) { me = user; sessionStorage.setItem("me", JSON.stringify(me
 $("#logout").onclick = () => { sessionStorage.removeItem("me"); me = null; viewLogin(); };
 
 function shell(html) {
-  clearInterval(timerId); db = load();
+  clearInterval(timerId);
   $("#bar").hidden = false; $("#who").textContent = `${me.name} (${me.role === "admin" ? "admin" : "học sinh"})`;
   app.innerHTML = html;
 }
@@ -57,6 +57,7 @@ const home = () => me.role === "admin" ? adminHome() : studentHome();
 
 // ===== Học sinh =====
 function studentHome() {
+  db = load();
   const subs = db.subjects.filter(s => s.visible);
   const sched = subs.flatMap(s => s.exams.filter(e => e.start).map(e => ({ ...e, sn: s.name, sid: s.id }))).sort((a, b) => new Date(a.start) - new Date(b.start));
   shell(`<h1>Môn học</h1>
@@ -66,6 +67,7 @@ function studentHome() {
   app.querySelectorAll(".subj").forEach(c => { c.onclick = () => subjectView(c.dataset.s); c.onkeydown = e => e.key === "Enter" && c.click(); });
 }
 function subjectView(id, tab = "learn") {
+  db = load();
   const s = subj(id);
   shell(`<button class="ghost" id="back">← Về trang chủ</button><h1 style="margin-top:12px">${esc(s.name)}</h1>
   <div class="tabs"><button class="${tab === "learn" ? "on" : ""}" data-t="learn">Học</button><button class="${tab === "exam" ? "on" : ""}" data-t="exam">Thi</button></div><div id="tab"></div>`);
@@ -84,6 +86,7 @@ function subjectView(id, tab = "learn") {
   }
 }
 function takeExam(sid, eid) {
+  db = load();
   const s = subj(sid), e = s.exams.find(x => x.id === eid);
   const endKey = `end-${me.name}-${eid}`;
   let end = +sessionStorage.getItem(endKey);
@@ -110,6 +113,7 @@ function takeExam(sid, eid) {
 
 // ===== Admin =====
 function adminHome() {
+  db = load();
   shell(`<h1>Quản lý môn học</h1>
   <div class="card row"><input id="ns" placeholder="Tên môn học mới" style="flex:1;margin:0"><button id="add">Thêm môn</button></div>
   ${db.subjects.map(s => `<div class="card row"><label style="flex:1"><input type="checkbox" data-v="${s.id}" ${s.visible ? "checked" : ""} style="width:auto;margin-right:8px">Hiện cho học sinh: <strong>${esc(s.name)}</strong></label>
@@ -121,6 +125,7 @@ function adminHome() {
   app.querySelectorAll("[data-d]").forEach(b => b.onclick = () => { if (confirm("Xóa môn này cùng bài giảng và bài thi?")) { db.subjects = db.subjects.filter(s => s.id !== b.dataset.d); save(); adminHome(); } });
 }
 function adminSubject(id) {
+  db = load();
   const s = subj(id);
   shell(`<button class="ghost" id="back">← Quay lại</button><h1 style="margin-top:12px">${esc(s.name)}</h1>
   <h2>Bài giảng</h2>${s.lessons.map(l => `<div class="card row"><span style="flex:1">${esc(l.title)} <span class="mute">${esc(l.url)}</span></span><button class="del" data-dl="${l.id}">Xóa</button></div>`).join("")}
