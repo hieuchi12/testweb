@@ -39,7 +39,7 @@ function viewLogin() {
     if (db.users.some(x => x.u === u) || u === ADMIN.user) return err("Tên này đã tồn tại.");
     db.users.push({ u, p }); save(); enter({ role: "student", name: u });
   };
-  [$("#u"), $("#p")].forEach(i => i.onkeydown = e => e.key === "Enter" && $("#go").click());
+  [$("#u"), $("#p")].forEach(i => i.addEventListener("keydown", e => { if (e.key === "Enter") $("#go").click(); }));
 }
 function enter(user) { me = user; sessionStorage.setItem("me", JSON.stringify(me)); home(); }
 $("#logout").onclick = () => { sessionStorage.removeItem("me"); me = null; viewLogin(); };
@@ -60,7 +60,7 @@ function studentHome() {
   <div class="grid">${subs.map(s => `<div class="card subj" tabindex="0" data-s="${s.id}"><h3>${esc(s.name)}</h3><span class="mute">${s.lessons.length} bài học · ${s.exams.length} bài thi</span></div>`).join("") || '<p class="mute">Chưa có môn học nào được mở. Hãy quay lại sau.</p>'}</div>
   <h2 style="margin-top:28px">Lịch kiểm tra</h2>
   ${sched.map(e => `<div class="card"><strong>${esc(e.sn)}</strong>: ${esc(e.title)}<br><span class="mute">${fmt(e.start)} · ${e.duration} phút</span></div>`).join("") || '<p class="mute">Chưa có lịch kiểm tra.</p>'}`);
-  app.querySelectorAll(".subj").forEach(c => { c.onclick = () => subjectView(c.dataset.s); c.onkeydown = e => e.key === "Enter" && c.click(); });
+  app.querySelectorAll(".subj").forEach(c => { c.onclick = () => subjectView(c.dataset.s); c.addEventListener("keydown", e => { if (e.key === "Enter") c.click(); }); });
 }
 function subjectView(id, tab = "learn") {
   db = load();
