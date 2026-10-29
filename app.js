@@ -18,32 +18,28 @@ const subj = id => db.subjects.find(s => s.id === id);
 function ytId(u) { const m = String(u).match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([\w-]{11})/); return m && m[1]; }
 
 // ===== Đăng nhập =====
-function viewLogin(mode = "student") {
+function viewLogin() {
   clearInterval(timerId);
   $("#bar").hidden = true;
   app.innerHTML = `<div class="card login"><h1>Đăng nhập</h1>
-  <div class="tabs"><button class="${mode === "student" ? "on" : ""}" data-m="student">Học sinh</button><button class="${mode === "admin" ? "on" : ""}" data-m="admin">Admin</button></div>
   <label>Tên đăng nhập<input id="u" autocomplete="username"></label>
   <label>Mật khẩu<input id="p" type="password" autocomplete="current-password"></label>
   <p id="err" class="bad"></p>
-  <div class="row"><button id="go">Đăng nhập</button>${mode === "student" ? '<button id="reg" class="ghost">Tạo tài khoản</button>' : ""}</div></div>`;
-  app.querySelectorAll("[data-m]").forEach(b => b.onclick = () => viewLogin(b.dataset.m));
+  <div class="row"><button id="go">Đăng nhập</button><button id="reg" class="ghost">Tạo tài khoản học sinh</button></div></div>`;
   const err = t => $("#err").textContent = t;
   $("#go").onclick = () => {
     const u = $("#u").value.trim(), p = $("#p").value;
-    if (mode === "admin") {
-      if (u === ADMIN.user && p === ADMIN.pass) return enter({ role: "admin", name: "Admin" });
-      return err("Sai tài khoản hoặc mật khẩu admin.");
-    }
+    if (u === ADMIN.user && p === ADMIN.pass) return enter({ role: "admin", name: "Admin" });
     const x = db.users.find(x => x.u === u && x.p === p);
     x ? enter({ role: "student", name: u }) : err("Sai tên đăng nhập hoặc mật khẩu.");
   };
-  if ($("#reg")) $("#reg").onclick = () => {
+  $("#reg").onclick = () => {
     const u = $("#u").value.trim(), p = $("#p").value;
     if (!u || p.length < 4) return err("Nhập tên và mật khẩu từ 4 ký tự.");
     if (db.users.some(x => x.u === u) || u === ADMIN.user) return err("Tên này đã tồn tại.");
     db.users.push({ u, p }); save(); enter({ role: "student", name: u });
   };
+  [$("#u"), $("#p")].forEach(i => i.onkeydown = e => e.key === "Enter" && $("#go").click());
 }
 function enter(user) { me = user; sessionStorage.setItem("me", JSON.stringify(me)); home(); }
 $("#logout").onclick = () => { sessionStorage.removeItem("me"); me = null; viewLogin(); };

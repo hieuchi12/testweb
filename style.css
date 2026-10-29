@@ -1,6 +1,7 @@
 :root{--bg:#f4f6fa;--ink:#14213d;--mute:#5b667a;--card:#fff;--line:#dde3ee;--acc:#1d4ed8;--hi:#f59e0b;--ok:#15803d;--bad:#b91c1c}
 @media(prefers-color-scheme:dark){:root{--bg:#0f1420;--ink:#e8ecf5;--mute:#9aa6bd;--card:#18202f;--line:#2a3550;--acc:#6b9bff;--hi:#fbbf24;--ok:#4ade80;--bad:#f87171}}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 body{margin:0;font:16px/1.6 "Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--ink)}
 header{display:flex;justify-content:space-between;align-items:center;padding:12px 20px;background:var(--ink);color:var(--bg)}
 header button{margin-left:8px}
