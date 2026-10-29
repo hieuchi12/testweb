@@ -41,21 +41,25 @@ input[type=checkbox],input[type=radio]{width:auto}
 .opt input{margin:0 10px 0 0}
 .ok{color:var(--ok)}.bad{color:var(--bad)}
 .login{max-width:400px;margin:7vh auto}
-@media(prefers-reduced-motion:reduce){*{transition:none!important}}
-
 .prog{display:flex;justify-content:space-between;font-weight:700;font-size:.9rem;margin:2px 0 4px}
 .prog b{color:var(--ct,var(--accd))}
 .bar{height:14px;border-radius:99px;background:#eef2fb;border:1px solid var(--line);overflow:hidden;margin-bottom:14px}
 .bar i{display:block;height:100%;background:var(--c,var(--acc));border-radius:99px}
-.subj p{margin-bottom:12px}
-.menus{margin-top:30px}
+.menus{margin-top:20px}
 .menu{--c:#34d399;--cd:#059669;--cl:#dcfce7;display:flex;align-items:center;gap:16px;cursor:pointer;border-color:var(--c)}
 .menu.m2{--c:#a855f7;--cd:#7e22ce;--cl:#f3e8ff}
+.menu.m3{--c:#f59e0b;--cd:#b45309;--cl:#fef3c7}
 .menu .ico{width:64px;height:64px;font-size:2rem;margin:0;flex:none}
 .menu>div:nth-child(2){flex:1}
 .menu h3{margin:0 0 2px;font-size:1.25rem}
 .menu p{margin:0}
 .menu>button{flex:none;background:var(--c);color:#fff;box-shadow:0 4px 0 var(--cd);width:48px;height:48px;padding:0;font-size:1.8rem;line-height:1;border-radius:14px}
 .new{display:inline-block;background:#ef4444;color:#fff;font:700 .75rem "Nunito",sans-serif;padding:1px 10px;border-radius:99px;vertical-align:middle;margin-left:6px}
-h3 .tag{margin:0 0 0 6px;font-size:.8rem;vertical-align:middle}
-.video+button{margin-top:4px}
+
+/* Banner CSS */
+.banner-box{width:100%;border-radius:24px;overflow:hidden;border:3px solid var(--line);box-shadow:0 7px 0 #e8dcb8;margin-bottom:22px;background:#fff}
+.banner-box img{width:100%;height:auto;max-height:220px;object-fit:cover;display:block}
+
+/* Đánh giá học lực */
+.eval-card{background:linear-gradient(135deg, #e0f2fe 0%, #fef3c7 100%);border-color:#38bdf8}
+.eval-badge{display:inline-block;padding:4px 16px;border-radius:12px;font-weight:800;font-size:1.1rem;color:#fff;background:#0284c7}
