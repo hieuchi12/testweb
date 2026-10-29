@@ -1,5 +1,5 @@
 // ===== Cấu hình =====
-const ADMIN = { user: "admin", pass: "admin123" }; // ĐỔI mật khẩu này trước khi đưa lên GitHub
+const ADMIN = { user: "admin", pass: "admin" }; // ĐỔI mật khẩu này trước khi đưa lên GitHub
 const KEY = "lms-data-v1";
 
 // ===== Lưu trữ (localStorage). Muốn dùng chung nhiều máy: thay 2 hàm này bằng Firebase =====
