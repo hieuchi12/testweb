@@ -105,11 +105,13 @@ function viewLogin() {
     const x = db.users.find(x => x.u === u && x.p === p);
     x ? enter({ role: "student", name: u }) : err("Sai tên đăng nhập hoặc mật khẩu.");
   };
-  $("#reg").onclick = () => {
+  $("#reg").onclick = async () => {
     const u = $("#u").value.trim(), p = $("#p").value;
     if (!u || p.length < 4) return err("Nhập tên và mật khẩu từ 4 ký tự.");
     if (db.users.some(x => x.u === u) || u === ADMIN.user) return err("Tên này đã tồn tại.");
-    db.users.push({ u, p }); save(); enter({ role: "student", name: u });
+    db.users.push({ u, p }); 
+    await save(); 
+    enter({ role: "student", name: u });
   };
   [$("#u"), $("#p")].forEach(i => i.addEventListener("keydown", e => { if (e.key === "Enter") $("#go").click(); }));
 }
@@ -207,94 +209,4 @@ function subjectView(id, tab = "learn") {
   $("#back").onclick = home;
   app.querySelectorAll("[data-t]").forEach(b => b.onclick = () => subjectView(id, b.dataset.t));
   if (tab === "learn") {
-    $("#tab").innerHTML = s.lessons.map(l => `<div class="card"><h3>${esc(l.title)}</h3><div class="video"><iframe src="https://www.youtube.com/embed/${ytId(l.url)}" allowfullscreen loading="lazy" title="${esc(l.title)}"></iframe></div>${db.progress.includes(me.name + "|" + l.id) ? `<button class="ghost" data-lp="${l.id}">✓ Đã ôn luyện xong</button>` : `<button data-lp="${l.id}">Đánh dấu đã ôn luyện</button>`}</div>`).join("") || '<p class="mute">Chưa có nội dung ôn luyện.</p>';
-    app.querySelectorAll("[data-lp]").forEach(b => b.onclick = async () => { 
-      const k = me.name + "|" + b.dataset.lp, i = db.progress.indexOf(k); 
-      if (i < 0) db.progress.push(k); else db.progress.splice(i, 1); 
-      await save(); 
-      subjectView(id, "learn"); 
-    });
-  } else {
-    $("#tab").innerHTML = s.exams.map(e => {
-      const now = Date.now(), st = e.start ? new Date(e.start).getTime() : 0, done = db.results.find(r => r.eid === e.id && r.user === me.name);
-      const wait = st > now;
-      return `<div class="card"><h3>${esc(e.title)}</h3><p class="mute">${e.duration} phút · ${e.questions.length} câu${e.start ? " · Mở lúc " + fmt(e.start) : ""}</p>
-      ${done ? `<p class="ok">Đã làm: ${done.score}/${e.questions.length} điểm</p>` : wait ? '<p class="mute">Chưa đến giờ kiểm tra.</p>' : `<button data-e="${e.id}">Bắt đầu kiểm tra</button>`}</div>`;
-    }).join("") || '<p class="mute">Chưa có bài kiểm tra.</p>';
-    app.querySelectorAll("[data-e]").forEach(b => b.onclick = () => confirm("Đồng hồ sẽ chạy ngay khi bắt đầu. Tiếp tục?") && takeExam(id, b.dataset.e));
-  }
-}
-
-function takeExam(sid, eid) {
-  const s = subj(sid), e = s.exams.find(x => x.id === eid);
-  const endKey = `end-${me.name}-${eid}`;
-  let end = +sessionStorage.getItem(endKey);
-  if (!end) { end = Date.now() + e.duration * 60000; sessionStorage.setItem(endKey, end); }
-  shell(`<h1>${esc(e.title)}</h1><div class="timer" id="t"></div>
-  ${e.questions.map((q, i) => `<div class="card"><strong>Câu ${i + 1}. ${esc(q.q)}</strong>${q.opts.map((o, j) => `<label class="opt"><input type="radio" name="q${i}" value="${j}">${esc(o)}</label>`).join("")}</div>`).join("")}
-  <button id="submit">Nộp bài</button>`);
-  let finished = false;
-  const finish = async auto => {
-    if (finished) return; finished = true; clearInterval(timerId);
-    let score = 0; e.questions.forEach((q, i) => { const c = document.querySelector(`input[name=q${i}]:checked`); if (c && +c.value === q.ans) score++; });
-    db.results.push({ eid, user: me.name, score, at: Date.now() }); 
-    await save(); 
-    sessionStorage.removeItem(endKey);
-    shell(`<div class="card"><h1>${auto ? "Hết giờ!" : "Đã nộp bài"}</h1><p>Điểm của bạn: <strong>${score}/${e.questions.length}</strong></p><button id="b">Về trang chủ</button></div>`);
-    $("#b").onclick = home;
-  };
-  const tick = () => {
-    const left = Math.max(0, end - Date.now()), m = Math.floor(left / 60000), sec = Math.floor(left / 1000) % 60;
-    $("#t").textContent = `Còn lại ${m}:${String(sec).padStart(2, "0")}`; $("#t").classList.toggle("low", left < 60000);
-    if (left <= 0) finish(true);
-  };
-  tick(); timerId = setInterval(tick, 500);
-  $("#submit").onclick = () => confirm("Nộp bài ngay?") && finish(false);
-}
-
-// ===== Admin =====
-function adminHome() {
-  shell(`
-  <h1>ChiCute Quản trị Hệ thống</h1>
-  
-  <!-- Cấu hình Màu nền Web -->
-  <div class="card">
-    <h2>🎨 Tùy chỉnh Màu nền Website</h2>
-    <div class="row">
-      <input type="color" id="bg-picker" value="${esc(db.bgColor || "#fff7dc")}" style="width:60px;height:42px;padding:2px;margin:0;cursor:pointer">
-      <input id="bg-url" placeholder="#fff7dc" value="${esc(db.bgColor || "#fff7dc")}" style="flex:1;margin:0">
-      <button id="save-bg">Áp dụng Màu nền</button>
-      <button class="ghost" id="reset-bg">Đặt lại mặc định</button>
-    </div>
-  </div>
-
-  <!-- Cấu hình Banner Menu Học Sinh -->
-  <div class="card">
-    <h2>🖼️ Quản lý Banner Học Sinh</h2>
-    <p class="mute">Tải ảnh lên từ máy hoặc dán đường link hình ảnh banner:</p>
-    <div class="row">
-      <input id="banner-url" placeholder="https://danh-sach-anh.com/banner.jpg" value="${esc(db.banner || "")}" style="flex:1;margin:0">
-      <button id="save-banner">Lưu URL Banner</button>
-    </div>
-    <div style="margin-top:10px">
-      <label class="ghost button" style="cursor:pointer;display:inline-block;padding:8px 18px;border-radius:16px;border:2px solid var(--line);font-weight:700">
-        📁 Chọn file ảnh từ máy
-        <input type="file" id="banner-file" accept="image/*" style="display:none">
-      </label>
-      ${db.banner ? `<button class="del" id="del-banner">Xóa Banner hiện tại</button>` : ""}
-    </div>
-    ${db.banner ? `<div style="margin-top:12px"><strong>Xem trước:</strong><br><img src="${esc(db.banner)}" style="max-height:120px;border-radius:12px;margin-top:6px;border:2px solid var(--line)"></div>` : ""}
-  </div>
-
-  <!-- Quản lý môn học -->
-  <div class="card">
-    <h2>📘 Quản lý Môn học</h2>
-    <div class="row">
-      <input id="ni" placeholder="📘" maxlength="4" aria-label="Biểu tượng" style="width:70px;margin:0;text-align:center">
-      <input id="ns" placeholder="Tên môn học mới" style="flex:1;margin:0">
-    </div>
-    <input id="nd" placeholder="Mô tả ngắn (hiện trên thẻ môn học)" style="margin:10px 0">
-    <button id="add">Thêm môn</button>
-  </div>
-
-  ${db.subjects.map(s => `<div class="card row"><label style="
+    $("#tab").innerHTML = s.lessons.map(l => `<div class="card"><h3>${esc(l.title)}</h3><div class="video"><iframe src="https://www.youtube.com/embed/${ytId(l.url)}" allowfullscreen loading="lazy" title="${esc(l.title)}"></iframe></div>${db.progress.includes(me.name + "|" + l.id) ? `<button class="ghost
