@@ -3,7 +3,7 @@ const ADMIN = { user: "admin", pass: "admin123" }; // ĐỔI mật khẩu này t
 const KEY = "lms-data-v1";
 
 // ===== Lưu trữ (localStorage). Muốn dùng chung nhiều máy: thay 2 hàm này bằng Firebase =====
-const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || { subjects: [], users: [], results: [] }; } catch { return { subjects: [], users: [], results: [] }; } };
+const load = () => { let d; try { d = JSON.parse(localStorage.getItem(KEY)); } catch { d = null; } return { subjects: [], users: [], results: [], progress: [], ...(d || {}) }; };
 const save = () => localStorage.setItem(KEY, JSON.stringify(db));
 let db = load();
 let me = JSON.parse(sessionStorage.getItem("me") || "null");
@@ -52,25 +52,54 @@ function shell(html) {
 const home = () => me.role === "admin" ? adminHome() : studentHome();
 
 // ===== Học sinh =====
+const prog = s => { const n = s.lessons.length; return n ? Math.round(100 * s.lessons.filter(l => db.progress.includes(me.name + "|" + l.id)).length / n) : 0; };
+const progHtml = s => { const p = prog(s); return `<div class="prog"><span>Tiến độ học</span><b>${p}%</b></div><div class="bar"><i style="width:${p}%"></i></div>`; };
+const scheduled = () => db.subjects.filter(s => s.visible).flatMap(s => s.exams.filter(e => e.start).map(e => ({ ...e, sn: s.name, sid: s.id }))).sort((a, b) => new Date(a.start) - new Date(b.start));
+const isDone = e => db.results.some(r => r.eid === e.id && r.user === me.name);
+
 function studentHome() {
   db = load();
   const subs = db.subjects.filter(s => s.visible);
-  const sched = subs.flatMap(s => s.exams.filter(e => e.start).map(e => ({ ...e, sn: s.name, sid: s.id }))).sort((a, b) => new Date(a.start) - new Date(b.start));
+  const n = scheduled().filter(e => !isDone(e)).length;
   shell(`<h1>Môn học</h1>
-  <div class="grid">${subs.map(s => `<div class="card subj" tabindex="0" data-s="${s.id}"><h3>${esc(s.name)}</h3><span class="mute">${s.lessons.length} bài học · ${s.exams.length} bài thi</span></div>`).join("") || '<p class="mute">Chưa có môn học nào được mở. Hãy quay lại sau.</p>'}</div>
-  <h2 style="margin-top:28px">Lịch kiểm tra</h2>
-  ${sched.map(e => `<div class="card"><strong>${esc(e.sn)}</strong>: ${esc(e.title)}<br><span class="mute">${fmt(e.start)} · ${e.duration} phút</span></div>`).join("") || '<p class="mute">Chưa có lịch kiểm tra.</p>'}`);
-  app.querySelectorAll(".subj").forEach(c => { c.onclick = () => subjectView(c.dataset.s); c.addEventListener("keydown", e => { if (e.key === "Enter") c.click(); }); });
+  <div class="grid">${subs.map((s, i) => `<div class="card subj c${i % 4}" data-s="${s.id}"><div class="ico">${esc(s.icon || "📘")}</div><span class="tag">MÔN HỌC ${String(i + 1).padStart(2, "0")}</span><h3>${esc(s.name)}</h3><p class="mute">${esc(s.desc || `${s.lessons.length} bài học · ${s.exams.length} bài thi`)}</p>${progHtml(s)}<button>Vào học ▶</button></div>`).join("") || '<p class="mute">Chưa có môn học nào được mở. Hãy quay lại sau.</p>'}</div>
+  <div class="menus">
+    <div class="card menu" data-go="history"><div class="ico">📜</div><div><h3>Lịch sử thi / Ôn luyện</h3><p class="mute">Xem lại điểm số và số câu đúng các bài thi đã làm.</p></div><button aria-label="Mở lịch sử thi">›</button></div>
+    <div class="card menu m2" data-go="schedule"><div class="ico">📅</div><div><h3>Lịch thi sắp tới${n ? ' <span class="new">Mới</span>' : ""}</h3><p class="mute">${n ? `${n} bài kiểm tra cần lưu ý.` : "Chưa có lịch kiểm tra."}</p></div><button aria-label="Mở lịch thi">›</button></div>
+  </div>`);
+  app.querySelectorAll(".subj").forEach(c => c.onclick = () => subjectView(c.dataset.s));
+  app.querySelectorAll("[data-go]").forEach(c => c.onclick = () => c.dataset.go === "history" ? historyView() : scheduleView());
+}
+function historyView() {
+  db = load();
+  const all = db.subjects.flatMap(s => s.exams.map(x => ({ ...x, sn: s.name })));
+  const rows = db.results.filter(r => r.user === me.name).sort((a, b) => b.at - a.at).map(r => {
+    const e = all.find(x => x.id === r.eid);
+    return `<div class="card"><h3>${e ? esc(e.title) : "(bài thi đã xóa)"}</h3><p class="mute" style="margin:0">${e ? esc(e.sn) + " · " : ""}${fmt(r.at)}</p><p style="margin:6px 0 0"><strong class="ok">${r.score}/${e ? e.questions.length : "?"}</strong> câu đúng</p></div>`;
+  });
+  shell(`<button class="ghost" id="back">← Về trang chủ</button><h1 style="margin-top:12px">Lịch sử thi</h1>${rows.join("") || '<p class="mute">Bạn chưa làm bài thi nào. Vào một môn học, chọn tab Thi để bắt đầu.</p>'}`);
+  $("#back").onclick = home;
+}
+function scheduleView() {
+  db = load();
+  const rows = scheduled().map(e => {
+    const st = isDone(e) ? "Đã làm" : new Date(e.start) > Date.now() ? "Sắp diễn ra" : "Đang mở";
+    return `<div class="card row"><div style="flex:1"><h3>${esc(e.title)} <span class="tag">${st}</span></h3><p class="mute" style="margin:0">${esc(e.sn)} · ${fmt(e.start)} · ${e.duration} phút</p></div>${st === "Đã làm" ? "" : `<button data-sid="${e.sid}">Đến môn học</button>`}</div>`;
+  });
+  shell(`<button class="ghost" id="back">← Về trang chủ</button><h1 style="margin-top:12px">Lịch thi sắp tới</h1>${rows.join("") || '<p class="mute">Chưa có lịch kiểm tra nào.</p>'}`);
+  $("#back").onclick = home;
+  app.querySelectorAll("[data-sid]").forEach(b => b.onclick = () => subjectView(b.dataset.sid, "exam"));
 }
 function subjectView(id, tab = "learn") {
   db = load();
   const s = subj(id);
-  shell(`<button class="ghost" id="back">← Về trang chủ</button><h1 style="margin-top:12px">${esc(s.name)}</h1>
+  shell(`<button class="ghost" id="back">← Về trang chủ</button><h1 style="margin-top:12px">${esc(s.name)}</h1>${progHtml(s)}
   <div class="tabs"><button class="${tab === "learn" ? "on" : ""}" data-t="learn">Học</button><button class="${tab === "exam" ? "on" : ""}" data-t="exam">Thi</button></div><div id="tab"></div>`);
   $("#back").onclick = home;
   app.querySelectorAll("[data-t]").forEach(b => b.onclick = () => subjectView(id, b.dataset.t));
   if (tab === "learn") {
-    $("#tab").innerHTML = s.lessons.map(l => `<div class="card"><h3>${esc(l.title)}</h3><div class="video"><iframe src="https://www.youtube.com/embed/${ytId(l.url)}" allowfullscreen loading="lazy" title="${esc(l.title)}"></iframe></div></div>`).join("") || '<p class="mute">Chưa có bài giảng.</p>';
+    $("#tab").innerHTML = s.lessons.map(l => `<div class="card"><h3>${esc(l.title)}</h3><div class="video"><iframe src="https://www.youtube.com/embed/${ytId(l.url)}" allowfullscreen loading="lazy" title="${esc(l.title)}"></iframe></div>${db.progress.includes(me.name + "|" + l.id) ? `<button class="ghost" data-lp="${l.id}">✓ Đã học xong</button>` : `<button data-lp="${l.id}">Đánh dấu đã học</button>`}</div>`).join("") || '<p class="mute">Chưa có bài giảng.</p>';
+    app.querySelectorAll("[data-lp]").forEach(b => b.onclick = () => { const k = me.name + "|" + b.dataset.lp, i = db.progress.indexOf(k); if (i < 0) db.progress.push(k); else db.progress.splice(i, 1); save(); subjectView(id, "learn"); });
   } else {
     $("#tab").innerHTML = s.exams.map(e => {
       const now = Date.now(), st = e.start ? new Date(e.start).getTime() : 0, done = db.results.find(r => r.eid === e.id && r.user === me.name);
@@ -111,11 +140,11 @@ function takeExam(sid, eid) {
 function adminHome() {
   db = load();
   shell(`<h1>Quản lý môn học</h1>
-  <div class="card row"><input id="ns" placeholder="Tên môn học mới" style="flex:1;margin:0"><button id="add">Thêm môn</button></div>
+  <div class="card"><div class="row"><input id="ni" placeholder="📘" maxlength="4" aria-label="Biểu tượng" style="width:70px;margin:0;text-align:center"><input id="ns" placeholder="Tên môn học mới" style="flex:1;margin:0"></div><input id="nd" placeholder="Mô tả ngắn (hiện trên thẻ môn học)" style="margin:10px 0"><button id="add">Thêm môn</button></div>
   ${db.subjects.map(s => `<div class="card row"><label style="flex:1"><input type="checkbox" data-v="${s.id}" ${s.visible ? "checked" : ""} style="width:auto;margin-right:8px">Hiện cho học sinh: <strong>${esc(s.name)}</strong></label>
   <button data-m="${s.id}">Quản lý</button><button class="del" data-d="${s.id}">Xóa</button></div>`).join("") || '<p class="mute">Chưa có môn nào. Hãy thêm môn đầu tiên.</p>'}
   <h2 style="margin-top:24px">Kết quả thi</h2>${db.results.map(r => { const e = db.subjects.flatMap(s => s.exams).find(x => x.id === r.eid); return `<div class="card">${esc(r.user)} · ${esc(e ? e.title : "(đã xóa)")}: <strong>${r.score}</strong> điểm <span class="mute">${fmt(r.at)}</span></div>`; }).join("") || '<p class="mute">Chưa có bài nộp.</p>'}`);
-  $("#add").onclick = () => { const n = $("#ns").value.trim(); if (!n) return; db.subjects.push({ id: uid(), name: n, visible: false, lessons: [], exams: [] }); save(); adminHome(); };
+  $("#add").onclick = () => { const n = $("#ns").value.trim(); if (!n) return; db.subjects.push({ id: uid(), name: n, icon: $("#ni").value.trim() || "📘", desc: $("#nd").value.trim(), visible: false, lessons: [], exams: [] }); save(); adminHome(); };
   app.querySelectorAll("[data-v]").forEach(c => c.onchange = () => { subj(c.dataset.v).visible = c.checked; save(); });
   app.querySelectorAll("[data-m]").forEach(b => b.onclick = () => adminSubject(b.dataset.m));
   app.querySelectorAll("[data-d]").forEach(b => b.onclick = () => { if (confirm("Xóa môn này cùng bài giảng và bài thi?")) { db.subjects = db.subjects.filter(s => s.id !== b.dataset.d); save(); adminHome(); } });
