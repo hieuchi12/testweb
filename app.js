@@ -6,7 +6,7 @@ const KEY = "lms-data-v1";
 const load = () => {
   let d;
   try { d = JSON.parse(localStorage.getItem(KEY)); } catch { d = null; }
-  return { subjects: [], users: [], results: [], progress: [], banner: "", ...(d || {}) };
+  return { subjects: [], users: [], results: [], progress: [], banner: "", bgColor: "#fff7dc", ...(d || {}) };
 };
 const save = () => localStorage.setItem(KEY, JSON.stringify(db));
 let db = load();
@@ -20,6 +20,13 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": 
 const fmt = t => new Date(t).toLocaleString("vi-VN");
 const subj = id => db.subjects.find(s => s.id === id);
 function ytId(u) { const m = String(u).match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([\w-]{11})/); return m && m[1]; }
+
+// Cập nhật màu nền hệ thống
+function applyBgColor() {
+  if (db.bgColor) {
+    document.documentElement.style.setProperty('--bg', db.bgColor);
+  }
+}
 
 // ===== Đánh giá học lực =====
 function getAcademicEval(username) {
@@ -50,8 +57,9 @@ function getAcademicEval(username) {
 // ===== Đăng nhập =====
 function viewLogin() {
   clearInterval(timerId);
+  applyBgColor();
   $("#bar").hidden = true;
-  app.innerHTML = `<div class="card login"><h1>Đăng nhập</h1>
+  app.innerHTML = `<div class="card login"><h1>ChiCute Đăng nhập</h1>
   <label>Tên đăng nhập<input id="u" autocomplete="username"></label>
   <label>Mật khẩu<input id="p" type="password" autocomplete="current-password"></label>
   <p id="err" class="bad"></p>
@@ -76,6 +84,7 @@ $("#logout").onclick = () => { sessionStorage.removeItem("me"); me = null; viewL
 
 function shell(html) {
   clearInterval(timerId);
+  applyBgColor();
   $("#bar").hidden = false; $("#who").textContent = `${me.name} (${me.role === "admin" ? "admin" : "học sinh"})`;
   app.innerHTML = html;
 }
@@ -212,8 +221,19 @@ function takeExam(sid, eid) {
 function adminHome() {
   db = load();
   shell(`
-  <h1>Quản trị Hệ thống</h1>
+  <h1>ChiCute Quản trị Hệ thống</h1>
   
+  <!-- Cấu hình Màu nền Web -->
+  <div class="card">
+    <h2>🎨 Tùy chỉnh Màu nền Website</h2>
+    <div class="row">
+      <input type="color" id="bg-picker" value="${esc(db.bgColor || "#fff7dc")}" style="width:60px;height:42px;padding:2px;margin:0;cursor:pointer">
+      <input id="bg-url" placeholder="#fff7dc" value="${esc(db.bgColor || "#fff7dc")}" style="flex:1;margin:0">
+      <button id="save-bg">Áp dụng Màu nền</button>
+      <button class="ghost" id="reset-bg">Đặt lại mặc định</button>
+    </div>
+  </div>
+
   <!-- Cấu hình Banner Menu Học Sinh -->
   <div class="card">
     <h2>🖼️ Quản lý Banner Học Sinh</h2>
@@ -273,6 +293,23 @@ function adminHome() {
   }).join("") || '<p class="mute">Chưa có bài nộp nào.</p>'}
   </div>
   `);
+
+  // Xử lý Sự kiện Admin Màu nền
+  $("#bg-picker").oninput = (e) => {
+    $("#bg-url").value = e.target.value;
+  };
+  $("#save-bg").onclick = () => {
+    db.bgColor = $("#bg-url").value.trim() || "#fff7dc";
+    save();
+    applyBgColor();
+    adminHome();
+  };
+  $("#reset-bg").onclick = () => {
+    db.bgColor = "#fff7dc";
+    save();
+    applyBgColor();
+    adminHome();
+  };
 
   // Xử lý Sự kiện Admin Banner
   $("#save-banner").onclick = () => {
