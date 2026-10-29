@@ -1,0 +1,32 @@
+:root{--bg:#f4f6fa;--ink:#14213d;--mute:#5b667a;--card:#fff;--line:#dde3ee;--acc:#1d4ed8;--hi:#f59e0b;--ok:#15803d;--bad:#b91c1c}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1420;--ink:#e8ecf5;--mute:#9aa6bd;--card:#18202f;--line:#2a3550;--acc:#6b9bff;--hi:#fbbf24;--ok:#4ade80;--bad:#f87171}}
+*{box-sizing:border-box}
+body{margin:0;font:16px/1.6 "Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+header{display:flex;justify-content:space-between;align-items:center;padding:12px 20px;background:var(--ink);color:var(--bg)}
+header button{margin-left:8px}
+main{max-width:960px;margin:0 auto;padding:24px 16px}
+h1,h2,h3{line-height:1.25;margin:0 0 12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+.subj{cursor:pointer;border-left:5px solid var(--acc);transition:transform .15s}
+.subj:hover{transform:translateY(-2px)}
+button{font:inherit;padding:8px 14px;border-radius:8px;border:0;background:var(--acc);color:#fff;cursor:pointer}
+button.ghost{background:transparent;border:1px solid currentColor;color:inherit}
+button.del{background:var(--bad)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--hi);outline-offset:2px}
+input,select,textarea{font:inherit;width:100%;padding:8px 10px;margin:4px 0 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.row>*{flex:0 1 auto}
+.tabs{display:flex;gap:8px;margin-bottom:16px}
+.tabs button{background:var(--card);color:var(--ink);border:1px solid var(--line)}
+.tabs button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.video{position:relative;padding-top:56.25%;margin:12px 0}
+.video iframe{position:absolute;inset:0;width:100%;height:100%;border:0;border-radius:10px}
+.mute{color:var(--mute);font-size:.9rem}
+.timer{position:sticky;top:0;background:var(--hi);color:#14213d;padding:8px 14px;border-radius:8px;font-weight:700;text-align:center;z-index:5;margin-bottom:12px}
+.timer.low{background:var(--bad);color:#fff}
+.opt{display:block;padding:8px 10px;border:1px solid var(--line);border-radius:8px;margin:6px 0;cursor:pointer}
+.opt input{width:auto;margin:0 8px 0 0}
+.ok{color:var(--ok)}.bad{color:var(--bad)}
+.login{max-width:380px;margin:8vh auto}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
