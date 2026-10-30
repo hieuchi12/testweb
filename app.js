@@ -1,23 +1,15 @@
-// ===== Cấu hình Firebase cho Web (Compat Version) =====
-const firebaseConfig = {
-  apiKey: "AIzaSyDhA4lv_e1Qllp4WX9eYdoHaqvOx1WbOEc",
-  authDomain: "webtest-16a43.firebaseapp.com",
-  projectId: "webtest-16a43",
-  storageBucket: "webtest-16a43.firebasestorage.app",
-  messagingSenderId: "765163304650",
-  appId: "1:765163304650:web:4b042583e2d2ad0f78a633",
-  measurementId: "G-95E2KXE286"
-};
-
-// Khởi tạo Firebase
-if (!firebase.apps.length) {
-  firebase.initializeApp(firebaseConfig);
-}
-const dbFirestore = firebase.firestore();
-
-// ===== Cấu hình ứng dụng =====
+// ===== Cấu hình =====
 const ADMIN = { user: "admin", pass: "admin123" };
-let db = { subjects: [], users: [], results: [], progress: [], banner: "", bgColor: "#fff7dc" };
+const KEY = "lms-data-v1";
+
+// ===== Lưu trữ dữ liệu =====
+const load = () => {
+  let d;
+  try { d = JSON.parse(localStorage.getItem(KEY)); } catch { d = null; }
+  return { subjects: [], users: [], results: [], progress: [], banner: "", bgColor: "#fff7dc", ...(d || {}) };
+};
+const save = () => localStorage.setItem(KEY, JSON.stringify(db));
+let db = load();
 let me = JSON.parse(sessionStorage.getItem("me") || "null");
 let timerId = null;
 
@@ -29,43 +21,11 @@ const fmt = t => new Date(t).toLocaleString("vi-VN");
 const subj = id => db.subjects.find(s => s.id === id);
 function ytId(u) { const m = String(u).match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([\w-]{11})/); return m && m[1]; }
 
-// Áp dụng màu nền
+// Cập nhật màu nền hệ thống
 function applyBgColor() {
   if (db.bgColor) {
     document.documentElement.style.setProperty('--bg', db.bgColor);
   }
-}
-
-const cfgDoc = () => dbFirestore.collection("system").doc("config");
-const FV = () => firebase.firestore.FieldValue;
-const fail = e => { console.error(e); alert("Không lưu được lên Firebase. Kiểm tra mạng và Rules của Firestore."); };
-
-// Tải dữ liệu mới nhất từ Firestore
-async function sync() {
-  try {
-    const d = await cfgDoc().get();
-    if (d.exists) db = { ...db, ...d.data() }; else await cfgDoc().set(db);
-  } catch (e) { console.error("Lỗi tải dữ liệu:", e); }
-  applyBgColor();
-}
-// Admin: lưu nguyên các trường (môn học, banner, màu nền)
-async function save(...keys) {
-  const o = {}; keys.forEach(k => o[k] = db[k]);
-  try { await cfgDoc().set(o, { merge: true }); } catch (e) { fail(e); }
-}
-// Học sinh: thêm/xóa 1 phần tử, không ghi đè dữ liệu của người khác
-async function addTo(key, item) {
-  db[key].push(item);
-  try { await cfgDoc().set({ [key]: FV().arrayUnion(item) }, { merge: true }); } catch (e) { fail(e); }
-}
-async function removeFrom(key, item) {
-  const i = db[key].indexOf(item); if (i >= 0) db[key].splice(i, 1);
-  try { await cfgDoc().set({ [key]: FV().arrayRemove(item) }, { merge: true }); } catch (e) { fail(e); }
-}
-async function loadDataFromCloud() {
-  app.innerHTML = '<p class="mute" style="text-align:center">Đang tải dữ liệu...</p>';
-  if (me) return home();
-  await sync(); viewLogin();
 }
 
 // ===== Đánh giá học lực =====
@@ -105,20 +65,17 @@ function viewLogin() {
   <p id="err" class="bad"></p>
   <div class="row"><button id="go">Đăng nhập</button><button id="reg" class="ghost">Tạo tài khoản học sinh</button></div></div>`;
   const err = t => $("#err").textContent = t;
-  $("#go").onclick = async () => {
-    await sync();
+  $("#go").onclick = () => {
     const u = $("#u").value.trim(), p = $("#p").value;
     if (u === ADMIN.user && p === ADMIN.pass) return enter({ role: "admin", name: "Admin" });
     const x = db.users.find(x => x.u === u && x.p === p);
     x ? enter({ role: "student", name: u }) : err("Sai tên đăng nhập hoặc mật khẩu.");
   };
-  $("#reg").onclick = async () => {
-    await sync();
+  $("#reg").onclick = () => {
     const u = $("#u").value.trim(), p = $("#p").value;
     if (!u || p.length < 4) return err("Nhập tên và mật khẩu từ 4 ký tự.");
     if (db.users.some(x => x.u === u) || u === ADMIN.user) return err("Tên này đã tồn tại.");
-    await addTo("users", { u, p }); 
-    enter({ role: "student", name: u });
+    db.users.push({ u, p }); save(); enter({ role: "student", name: u });
   };
   [$("#u"), $("#p")].forEach(i => i.addEventListener("keydown", e => { if (e.key === "Enter") $("#go").click(); }));
 }
@@ -131,7 +88,7 @@ function shell(html) {
   $("#bar").hidden = false; $("#who").textContent = `${me.name} (${me.role === "admin" ? "admin" : "học sinh"})`;
   app.innerHTML = html;
 }
-const home = async () => { await sync(); me.role === "admin" ? adminHome() : studentHome(); };
+const home = () => me.role === "admin" ? adminHome() : studentHome();
 
 // ===== Học sinh =====
 const prog = s => { const n = s.lessons.length; return n ? Math.round(100 * s.lessons.filter(l => db.progress.includes(me.name + "|" + l.id)).length / n) : 0; };
@@ -140,6 +97,7 @@ const scheduled = () => db.subjects.filter(s => s.visible).flatMap(s => s.exams.
 const isDone = e => db.results.some(r => r.eid === e.id && r.user === me.name);
 
 function studentHome() {
+  db = load();
   const subs = db.subjects.filter(s => s.visible);
   const n = scheduled().filter(e => !isDone(e)).length;
   const evalData = getAcademicEval(me.name);
@@ -171,6 +129,7 @@ function studentHome() {
 }
 
 function evalView() {
+  db = load();
   const evalData = getAcademicEval(me.name);
   const myResults = db.results.filter(r => r.user === me.name);
 
@@ -190,6 +149,7 @@ function evalView() {
 }
 
 function historyView() {
+  db = load();
   const all = db.subjects.flatMap(s => s.exams.map(x => ({ ...x, sn: s.name })));
   const rows = db.results.filter(r => r.user === me.name).sort((a, b) => b.at - a.at).map(r => {
     const e = all.find(x => x.id === r.eid);
@@ -200,6 +160,7 @@ function historyView() {
 }
 
 function scheduleView() {
+  db = load();
   const rows = scheduled().map(e => {
     const st = isDone(e) ? "Đã làm" : new Date(e.start) > Date.now() ? "Sắp diễn ra" : "Đang mở";
     return `<div class="card row"><div style="flex:1"><h3>${esc(e.title)} <span class="tag">${st}</span></h3><p class="mute" style="margin:0">${esc(e.sn)} · ${fmt(e.start)} · ${e.duration} phút</p></div>${st === "Đã làm" ? "" : `<button data-sid="${e.sid}">Đến môn học</button>`}</div>`;
@@ -210,29 +171,28 @@ function scheduleView() {
 }
 
 function subjectView(id, tab = "learn") {
+  db = load();
   const s = subj(id);
   shell(`<button class="ghost" id="back">← Về trang chủ</button><h1 style="margin-top:12px">${esc(s.name)}</h1>${progHtml(s)}
   <div class="tabs"><button class="${tab === "learn" ? "on" : ""}" data-t="learn">Ôn luyện</button><button class="${tab === "exam" ? "on" : ""}" data-t="exam">Kiểm tra</button></div><div id="tab"></div>`);
   $("#back").onclick = home;
   app.querySelectorAll("[data-t]").forEach(b => b.onclick = () => subjectView(id, b.dataset.t));
   if (tab === "learn") {
-    $("#tab").innerHTML = s.lessons.map(l => `<div class="card"><h3>${esc(l.title)}</h3><div class="video"><iframe src="https://www.youtube.com/embed/${ytId(l.url)}" allowfullscreen loading="lazy" title="${esc(l.title)}"></iframe></div>${db.progress.includes(me.name + "|" + l.id) ? `<button class="ghost" data-lp="${l.id}">✓ Đã ôn xong</button>` : `<button data-lp="${l.id}">Đánh dấu đã ôn</button>`}</div>`).join("") || '<p class="mute">Chưa có bài ôn luyện.</p>';
-    app.querySelectorAll("[data-lp]").forEach(b => b.onclick = async () => {
-      const k = me.name + "|" + b.dataset.lp;
-      if (db.progress.includes(k)) await removeFrom("progress", k); else await addTo("progress", k);
-      subjectView(id, "learn");
-    });
+    $("#tab").innerHTML = s.lessons.map(l => `<div class="card"><h3>${esc(l.title)}</h3><div class="video"><iframe src="https://www.youtube.com/embed/${ytId(l.url)}" allowfullscreen loading="lazy" title="${esc(l.title)}"></iframe></div>${db.progress.includes(me.name + "|" + l.id) ? `<button class="ghost" data-lp="${l.id}">✓ Đã ôn luyện xong</button>` : `<button data-lp="${l.id}">Đánh dấu đã ôn luyện</button>`}</div>`).join("") || '<p class="mute">Chưa có nội dung ôn luyện.</p>';
+    app.querySelectorAll("[data-lp]").forEach(b => b.onclick = () => { const k = me.name + "|" + b.dataset.lp, i = db.progress.indexOf(k); if (i < 0) db.progress.push(k); else db.progress.splice(i, 1); save(); subjectView(id, "learn"); });
   } else {
     $("#tab").innerHTML = s.exams.map(e => {
-      const st = e.start ? new Date(e.start).getTime() : 0, done = db.results.find(r => r.eid === e.id && r.user === me.name);
+      const now = Date.now(), st = e.start ? new Date(e.start).getTime() : 0, done = db.results.find(r => r.eid === e.id && r.user === me.name);
+      const wait = st > now;
       return `<div class="card"><h3>${esc(e.title)}</h3><p class="mute">${e.duration} phút · ${e.questions.length} câu${e.start ? " · Mở lúc " + fmt(e.start) : ""}</p>
-      ${done ? `<p class="ok">Đã làm: ${done.score}/${e.questions.length} điểm</p>` : st > Date.now() ? '<p class="mute">Chưa đến giờ kiểm tra.</p>' : `<button data-e="${e.id}">Bắt đầu làm bài</button>`}</div>`;
+      ${done ? `<p class="ok">Đã làm: ${done.score}/${e.questions.length} điểm</p>` : wait ? '<p class="mute">Chưa đến giờ kiểm tra.</p>' : `<button data-e="${e.id}">Bắt đầu kiểm tra</button>`}</div>`;
     }).join("") || '<p class="mute">Chưa có bài kiểm tra.</p>';
     app.querySelectorAll("[data-e]").forEach(b => b.onclick = () => confirm("Đồng hồ sẽ chạy ngay khi bắt đầu. Tiếp tục?") && takeExam(id, b.dataset.e));
   }
 }
 
 function takeExam(sid, eid) {
+  db = load();
   const s = subj(sid), e = s.exams.find(x => x.id === eid);
   const endKey = `end-${me.name}-${eid}`;
   let end = +sessionStorage.getItem(endKey);
@@ -241,12 +201,10 @@ function takeExam(sid, eid) {
   ${e.questions.map((q, i) => `<div class="card"><strong>Câu ${i + 1}. ${esc(q.q)}</strong>${q.opts.map((o, j) => `<label class="opt"><input type="radio" name="q${i}" value="${j}">${esc(o)}</label>`).join("")}</div>`).join("")}
   <button id="submit">Nộp bài</button>`);
   let finished = false;
-  const finish = async auto => {
+  const finish = auto => {
     if (finished) return; finished = true; clearInterval(timerId);
-    let score = 0;
-    e.questions.forEach((q, i) => { const c = document.querySelector(`input[name=q${i}]:checked`); if (c && +c.value === q.ans) score++; });
-    sessionStorage.removeItem(endKey);
-    await addTo("results", { eid, user: me.name, score, at: Date.now() });
+    let score = 0; e.questions.forEach((q, i) => { const c = document.querySelector(`input[name=q${i}]:checked`); if (c && +c.value === q.ans) score++; });
+    db = load(); db.results.push({ eid, user: me.name, score, at: Date.now() }); save(); sessionStorage.removeItem(endKey);
     shell(`<div class="card"><h1>${auto ? "Hết giờ!" : "Đã nộp bài"}</h1><p>Điểm của bạn: <strong>${score}/${e.questions.length}</strong></p><button id="b">Về trang chủ</button></div>`);
     $("#b").onclick = home;
   };
@@ -261,54 +219,189 @@ function takeExam(sid, eid) {
 
 // ===== Admin =====
 function adminHome() {
-  const exams = db.subjects.flatMap(s => s.exams);
-  shell(`<h1>Quản lý hệ thống</h1>
-  <div class="card"><h3>Giao diện trang học sinh</h3>
-    <label>Link ảnh banner (để trống nếu không dùng)<input id="bn" value="${esc(db.banner)}" placeholder="https://..."></label>
-    <label>Màu nền<input id="bg" type="color" value="${esc(db.bgColor || "#fff7dc")}" style="width:90px;height:44px;padding:2px"></label>
-    <button id="sv">Lưu giao diện</button></div>
-  <h2>Môn học</h2>
-  <div class="card"><div class="row"><input id="ni" placeholder="📘" maxlength="4" aria-label="Biểu tượng" style="width:70px;margin:0;text-align:center"><input id="ns" placeholder="Tên môn học mới" style="flex:1;margin:0"></div><input id="nd" placeholder="Mô tả ngắn (hiện trên thẻ môn học)" style="margin:10px 0"><button id="add">Thêm môn</button></div>
-  ${db.subjects.map(s => `<div class="card row"><label style="flex:1"><input type="checkbox" data-v="${s.id}" ${s.visible ? "checked" : ""} style="margin-right:8px">Hiện cho học sinh: <strong>${esc(s.name)}</strong></label>
-  <button data-m="${s.id}">Quản lý</button><button class="del" data-d="${s.id}">Xóa</button></div>`).join("") || '<p class="mute">Chưa có môn nào. Hãy thêm môn đầu tiên.</p>'}
-  <h2 style="margin-top:24px">Kết quả kiểm tra</h2>${db.results.map(r => { const e = exams.find(x => x.id === r.eid); return `<div class="card">${esc(r.user)} · ${esc(e ? e.title : "(đã xóa)")}: <strong>${r.score}</strong> điểm <span class="mute">${fmt(r.at)}</span></div>`; }).join("") || '<p class="mute">Chưa có bài nộp.</p>'}`);
-  $("#sv").onclick = async () => { db.banner = $("#bn").value.trim(); db.bgColor = $("#bg").value; applyBgColor(); await save("banner", "bgColor"); alert("Đã lưu giao diện."); };
-  $("#add").onclick = async () => {
-    const n = $("#ns").value.trim(); if (!n) return;
-    db.subjects.push({ id: uid(), name: n, icon: $("#ni").value.trim() || "📘", desc: $("#nd").value.trim(), visible: false, lessons: [], exams: [] });
-    await save("subjects"); adminHome();
+  db = load();
+  shell(`
+  <h1>ChiCute Quản trị Hệ thống</h1>
+  
+  <!-- Cấu hình Màu nền Web -->
+  <div class="card">
+    <h2>🎨 Tùy chỉnh Màu nền Website</h2>
+    <div class="row">
+      <input type="color" id="bg-picker" value="${esc(db.bgColor || "#fff7dc")}" style="width:60px;height:42px;padding:2px;margin:0;cursor:pointer">
+      <input id="bg-url" placeholder="#fff7dc" value="${esc(db.bgColor || "#fff7dc")}" style="flex:1;margin:0">
+      <button id="save-bg">Áp dụng Màu nền</button>
+      <button class="ghost" id="reset-bg">Đặt lại mặc định</button>
+    </div>
+  </div>
+
+  <!-- Cấu hình Banner Menu Học Sinh -->
+  <div class="card">
+    <h2>🖼️ Quản lý Banner Học Sinh</h2>
+    <p class="mute">Tải ảnh lên từ máy hoặc dán đường link hình ảnh banner:</p>
+    <div class="row">
+      <input id="banner-url" placeholder="https://danh-sach-anh.com/banner.jpg" value="${esc(db.banner || "")}" style="flex:1;margin:0">
+      <button id="save-banner">Lưu URL Banner</button>
+    </div>
+    <div style="margin-top:10px">
+      <label class="ghost button" style="cursor:pointer;display:inline-block;padding:8px 18px;border-radius:16px;border:2px solid var(--line);font-weight:700">
+        📁 Chọn file ảnh từ máy
+        <input type="file" id="banner-file" accept="image/*" style="display:none">
+      </label>
+      ${db.banner ? `<button class="del" id="del-banner">Xóa Banner hiện tại</button>` : ""}
+    </div>
+    ${db.banner ? `<div style="margin-top:12px"><strong>Xem trước:</strong><br><img src="${esc(db.banner)}" style="max-height:120px;border-radius:12px;margin-top:6px;border:2px solid var(--line)"></div>` : ""}
+  </div>
+
+  <!-- Quản lý môn học -->
+  <div class="card">
+    <h2>📘 Quản lý Môn học</h2>
+    <div class="row">
+      <input id="ni" placeholder="📘" maxlength="4" aria-label="Biểu tượng" style="width:70px;margin:0;text-align:center">
+      <input id="ns" placeholder="Tên môn học mới" style="flex:1;margin:0">
+    </div>
+    <input id="nd" placeholder="Mô tả ngắn (hiện trên thẻ môn học)" style="margin:10px 0">
+    <button id="add">Thêm môn</button>
+  </div>
+
+  ${db.subjects.map(s => `<div class="card row"><label style="flex:1"><input type="checkbox" data-v="${s.id}" ${s.visible ? "checked" : ""} style="width:auto;margin-right:8px">Hiện cho học sinh: <strong>${esc(s.name)}</strong></label>
+  <button data-m="${s.id}">Quản lý</button><button class="del" data-d="${s.id}">Xóa</button></div>`).join("") || '<p class="mute">Chưa có môn nào.</p>'}
+
+  <!-- Quản lý học sinh -->
+  <h2 style="margin-top:28px">👥 Quản lý Học sinh</h2>
+  <div class="card">
+    ${db.users.length ? db.users.map(u => {
+      const doneCount = db.results.filter(r => r.user === u.u).length;
+      return `<div class="row" style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--line);justify-content:space-between">
+        <div><strong>${esc(u.u)}</strong> <span class="mute">(${doneCount} bài đã kiểm tra)</span></div>
+        <button class="del" data-deluser="${esc(u.u)}" style="padding:4px 12px;font-size:0.9rem">Xóa tài khoản</button>
+      </div>`;
+    }).join("") : '<p class="mute">Chưa có tài khoản học sinh nào đăng ký.</p>'}
+  </div>
+
+  <!-- Quản lý Lịch sử kiểm tra -->
+  <div class="row" style="justify-content:space-between;align-items:center;margin-top:28px">
+    <h2 style="margin:0">📜 Lịch sử Kiểm tra Toàn hệ thống</h2>
+    ${db.results.length ? `<button class="del" id="clear-all-results">Xóa TOÀN BỘ lịch sử</button>` : ""}
+  </div>
+  <div style="margin-top:12px">
+  ${db.results.map((r, idx) => { 
+    const e = db.subjects.flatMap(s => s.exams).find(x => x.id === r.eid); 
+    return `<div class="card row" style="justify-content:space-between">
+      <div><strong>${esc(r.user)}</strong> · ${esc(e ? e.title : "(đã xóa)")}: <strong class="ok">${r.score}</strong> điểm <span class="mute">(${fmt(r.at)})</span></div>
+      <button class="del" data-delres="${idx}" style="padding:4px 10px;font-size:0.85rem">Xóa</button>
+    </div>`; 
+  }).join("") || '<p class="mute">Chưa có bài nộp nào.</p>'}
+  </div>
+  `);
+
+  // Xử lý Sự kiện Admin Màu nền
+  $("#bg-picker").oninput = (e) => {
+    $("#bg-url").value = e.target.value;
   };
-  app.querySelectorAll("[data-v]").forEach(c => c.onchange = async () => { subj(c.dataset.v).visible = c.checked; await save("subjects"); });
+  $("#save-bg").onclick = () => {
+    db.bgColor = $("#bg-url").value.trim() || "#fff7dc";
+    save();
+    applyBgColor();
+    adminHome();
+  };
+  $("#reset-bg").onclick = () => {
+    db.bgColor = "#fff7dc";
+    save();
+    applyBgColor();
+    adminHome();
+  };
+
+  // Xử lý Sự kiện Admin Banner
+  $("#save-banner").onclick = () => {
+    db.banner = $("#banner-url").value.trim();
+    save();
+    adminHome();
+  };
+  $("#banner-file").onchange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        db.banner = evt.target.result;
+        save();
+        adminHome();
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+  if ($("#del-banner")) {
+    $("#del-banner").onclick = () => {
+      db.banner = "";
+      save();
+      adminHome();
+    };
+  }
+
+  // Thêm môn học
+  $("#add").onclick = () => { 
+    const n = $("#ns").value.trim(); 
+    if (!n) return; 
+    db.subjects.push({ id: uid(), name: n, icon: $("#ni").value.trim() || "📘", desc: $("#nd").value.trim(), visible: false, lessons: [], exams: [] }); 
+    save(); 
+    adminHome(); 
+  };
+  
+  app.querySelectorAll("[data-v]").forEach(c => c.onchange = () => { subj(c.dataset.v).visible = c.checked; save(); });
   app.querySelectorAll("[data-m]").forEach(b => b.onclick = () => adminSubject(b.dataset.m));
-  app.querySelectorAll("[data-d]").forEach(b => b.onclick = async () => { if (confirm("Xóa môn này cùng bài giảng và bài kiểm tra?")) { db.subjects = db.subjects.filter(s => s.id !== b.dataset.d); await save("subjects"); adminHome(); } });
+  app.querySelectorAll("[data-d]").forEach(b => b.onclick = () => { if (confirm("Xóa môn này cùng bài giảng và bài thi?")) { db.subjects = db.subjects.filter(s => s.id !== b.dataset.d); save(); adminHome(); } });
+
+  // Xóa tài khoản học sinh
+  app.querySelectorAll("[data-deluser]").forEach(b => b.onclick = () => {
+    const uname = b.dataset.deluser;
+    if (confirm(`Bạn có chắc muốn xóa tài khoản học sinh "${uname}"?`)) {
+      db.users = db.users.filter(u => u.u !== uname);
+      db.results = db.results.filter(r => r.user !== uname);
+      save();
+      adminHome();
+    }
+  });
+
+  // Xóa lịch sử kiểm tra
+  app.querySelectorAll("[data-delres]").forEach(b => b.onclick = () => {
+    const idx = +b.dataset.delres;
+    db.results.splice(idx, 1);
+    save();
+    adminHome();
+  });
+
+  if ($("#clear-all-results")) {
+    $("#clear-all-results").onclick = () => {
+      if (confirm("Bạn có chắc chắn muốn xóa TOÀN BỘ lịch sử kiểm tra của tất cả học sinh?")) {
+        db.results = [];
+        save();
+        adminHome();
+      }
+    };
+  }
 }
 
 function adminSubject(id) {
+  db = load();
   const s = subj(id);
   shell(`<button class="ghost" id="back">← Quay lại</button><h1 style="margin-top:12px">${esc(s.name)}</h1>
-  <h2>Bài ôn luyện (video)</h2>${s.lessons.map(l => `<div class="card row"><span style="flex:1">${esc(l.title)} <span class="mute">${esc(l.url)}</span></span><button class="del" data-dl="${l.id}">Xóa</button></div>`).join("")}
-  <div class="card"><input id="lt" placeholder="Tên bài giảng"><input id="lu" placeholder="Link YouTube"><p id="le" class="bad"></p><button id="al">Thêm bài giảng</button></div>
-  <h2>Bài kiểm tra</h2>${s.exams.map(e => `<div class="card row"><span style="flex:1">${esc(e.title)} · ${e.duration} phút · ${e.questions.length} câu${e.start ? " · " + fmt(e.start) : ""}</span><button class="del" data-de="${e.id}">Xóa</button></div>`).join("")}
+  <h2>Nội dung Ôn luyện (Bài giảng)</h2>${s.lessons.map(l => `<div class="card row"><span style="flex:1">${esc(l.title)} <span class="mute">${esc(l.url)}</span></span><button class="del" data-dl="${l.id}">Xóa</button></div>`).join("")}
+  <div class="card"><input id="lt" placeholder="Tên bài ôn luyện"><input id="lu" placeholder="Link YouTube"><p id="le" class="bad"></p><button id="al">Thêm bài ôn luyện</button></div>
+  <h2>Bài Kiểm tra</h2>${s.exams.map(e => `<div class="card row"><span style="flex:1">${esc(e.title)} · ${e.duration} phút · ${e.questions.length} câu${e.start ? " · " + fmt(e.start) : ""}</span><button class="del" data-de="${e.id}">Xóa</button></div>`).join("")}
   <div class="card"><input id="et" placeholder="Tên bài kiểm tra">
   <div class="row"><label>Thời gian làm bài (phút)<input id="ed" type="number" min="1" value="15"></label><label>Lịch kiểm tra (không bắt buộc)<input id="es" type="datetime-local"></label></div>
   <label>Câu hỏi: mỗi câu 6 dòng — câu hỏi, 4 đáp án, rồi số đáp án đúng (1-4). Cách nhau bằng một dòng trống.
   <textarea id="eq" rows="9" placeholder="2 + 2 bằng mấy?&#10;3&#10;4&#10;5&#10;6&#10;2"></textarea></label><p id="ee" class="bad"></p><button id="ae">Thêm bài kiểm tra</button></div>`);
   $("#back").onclick = adminHome;
-  $("#al").onclick = async () => {
-    const t = $("#lt").value.trim(), u = $("#lu").value.trim();
-    if (!t || !ytId(u)) return $("#le").textContent = "Cần tên bài và link YouTube hợp lệ.";
-    s.lessons.push({ id: uid(), title: t, url: u }); await save("subjects"); adminSubject(id);
-  };
-  $("#ae").onclick = async () => {
+  $("#al").onclick = () => { const t = $("#lt").value.trim(), u = $("#lu").value.trim(); if (!t || !ytId(u)) return $("#le").textContent = "Cần tên bài và link YouTube hợp lệ."; s.lessons.push({ id: uid(), title: t, url: u }); save(); adminSubject(id); };
+  $("#ae").onclick = () => {
     const t = $("#et").value.trim(), d = +$("#ed").value, bad = m => $("#ee").textContent = m;
     const qs = $("#eq").value.trim().split(/\n\s*\n/).filter(Boolean).map(b => { const l = b.split("\n").map(x => x.trim()); return { q: l[0], opts: l.slice(1, 5), ans: (+l[5]) - 1 }; });
     if (!t || d < 1) return bad("Cần tên bài kiểm tra và thời gian hợp lệ.");
     if (!qs.length || qs.some(q => q.opts.length < 4 || !(q.ans >= 0 && q.ans < 4))) return bad("Câu hỏi sai định dạng: mỗi câu cần 1 câu hỏi, 4 đáp án và số đáp án đúng.");
-    s.exams.push({ id: uid(), title: t, duration: d, start: $("#es").value || "", questions: qs }); await save("subjects"); adminSubject(id);
+    s.exams.push({ id: uid(), title: t, duration: d, start: $("#es").value || "", questions: qs }); save(); adminSubject(id);
   };
-  app.querySelectorAll("[data-dl]").forEach(b => b.onclick = async () => { s.lessons = s.lessons.filter(l => l.id !== b.dataset.dl); await save("subjects"); adminSubject(id); });
-  app.querySelectorAll("[data-de]").forEach(b => b.onclick = async () => { s.exams = s.exams.filter(e => e.id !== b.dataset.de); await save("subjects"); adminSubject(id); });
+  app.querySelectorAll("[data-dl]").forEach(b => b.onclick = () => { s.lessons = s.lessons.filter(l => l.id !== b.dataset.dl); save(); adminSubject(id); });
+  app.querySelectorAll("[data-de]").forEach(b => b.onclick = () => { s.exams = s.exams.filter(e => e.id !== b.dataset.de); save(); adminSubject(id); });
 }
 
-// ===== Khởi chạy =====
-loadDataFromCloud();
+me ? home() : viewLogin();
